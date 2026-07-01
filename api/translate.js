@@ -115,8 +115,13 @@ module.exports = async function handler(req, res) {
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents: [{ role: 'user', parts: [{ text: userContent }] }],
         generationConfig: {
-          maxOutputTokens: 1000,
+          // Gemini 2.5 Flash is a "thinking" model: reasoning tokens count
+          // against maxOutputTokens. Give plenty of room so the JSON answer
+          // is never truncated by the thinking phase.
+          maxOutputTokens: 2048,
           temperature: 0.7,
+          // Cap (but don't fully disable) thinking so it can't eat the budget.
+          thinkingConfig: { thinkingBudget: 512 },
           // Ask Gemini for guaranteed JSON — no fence-stripping needed.
           responseMimeType: 'application/json',
         },
@@ -131,11 +136,23 @@ module.exports = async function handler(req, res) {
 
     const payload = await upstream.json();
 
+    // Surface truncation/blocking explicitly instead of failing silently.
+    const finish = payload.candidates?.[0]?.finishReason;
+    if (finish && finish !== 'STOP') {
+      console.error('Gemini finishReason:', finish, JSON.stringify(payload.usageMetadata || {}));
+      return res.status(502).json({ error: 'The translation was cut off. Try a shorter chunk and give it another go.' });
+    }
+
     // Gemini puts the text in candidates[0].content.parts[*].text
     let raw = (payload.candidates?.[0]?.content?.parts || [])
       .map(p => p.text || '')
       .join('')
       .trim();
+
+    if (!raw) {
+      console.error('Gemini empty response:', JSON.stringify(payload).slice(0, 500));
+      return res.status(502).json({ error: 'The translation service returned an empty response. Try again in a moment.' });
+    }
 
     // With responseMimeType: 'application/json' this should already be clean,
     // but keep a defensive strip in case a fence ever sneaks in.
