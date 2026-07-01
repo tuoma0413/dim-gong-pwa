@@ -24,6 +24,10 @@ Return ONLY a single valid JSON object, with no markdown, no code fences, and no
   ]
 }`;
 
+// Which Gemini model to call. Flash is free-tier eligible and more than capable
+// for this task. You can override via env without touching code.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
 // In-memory per-IP rate limiter. Best-effort — resets per warm instance.
 const rateLimitMap = new Map();
 const RATE_LIMIT = 40;
@@ -71,45 +75,70 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'Text is too long — please keep it under 2,000 characters.' });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    console.error('ANTHROPIC_API_KEY is not set');
+    console.error('GEMINI_API_KEY is not set');
     return res.status(500).json({ error: 'Translation service is not configured. Please contact the app owner.' });
+  }
+
+  // Mock mode: set GEMINI_API_KEY=mock in .env.local to test locally for free
+  if (apiKey === 'mock') {
+    await new Promise(r => setTimeout(r, 700)); // simulate latency
+    return res.status(200).json({
+      yue: '收工之後去食個嘢啦，我請！',
+      jyutping: 'sau1 gung1 zi1 hau6 heoi3 sik6 go3 je5 laa1, ngo5 ceng2!',
+      register: 'Casual, friendly — something you\'d say to a colleague or friend',
+      literal: 'After finishing work, go eat something — my treat!',
+      alternatives: [
+        {
+          label: 'Even more casual',
+          yue: '收工搵嘢食，我請客！',
+          jyutping: 'sau1 gung1 wan2 je5 sik6, ngo5 ceng2 haak3!',
+          note: 'Slightly more clipped; sounds very natural among close friends',
+        },
+      ],
+    });
   }
 
   const hint = (!sourceLang || sourceLang === 'auto') ? '' : `Source language: ${sourceLang}\n`;
   const userContent = `${hint}Translate this into natural spoken Hong Kong Cantonese:\n\n"""${text.trim()}"""`;
 
   try {
-    const upstream = await fetch('https://api.anthropic.com/v1/messages', {
+    const url =
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
+    const upstream = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userContent }],
+        // Gemini's equivalent of a system prompt.
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: [{ role: 'user', parts: [{ text: userContent }] }],
+        generationConfig: {
+          maxOutputTokens: 1000,
+          temperature: 0.7,
+          // Ask Gemini for guaranteed JSON — no fence-stripping needed.
+          responseMimeType: 'application/json',
+        },
       }),
     });
 
     if (!upstream.ok) {
       const body = await upstream.text();
-      console.error('Anthropic error:', upstream.status, body);
+      console.error('Gemini error:', upstream.status, body);
       return res.status(502).json({ error: 'The translation service returned an error. Try again in a moment.' });
     }
 
     const payload = await upstream.json();
-    let raw = (payload.content || [])
-      .filter(b => b.type === 'text')
-      .map(b => b.text)
+
+    // Gemini puts the text in candidates[0].content.parts[*].text
+    let raw = (payload.candidates?.[0]?.content?.parts || [])
+      .map(p => p.text || '')
       .join('')
       .trim();
 
-    // Strip accidental markdown fences
+    // With responseMimeType: 'application/json' this should already be clean,
+    // but keep a defensive strip in case a fence ever sneaks in.
     raw = raw.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
     if (raw[0] !== '{') {
       const m = raw.match(/\{[\s\S]*\}/);
@@ -118,6 +147,9 @@ module.exports = async function handler(req, res) {
 
     const data = JSON.parse(raw);
     if (!data.yue) throw new Error('Empty yue field');
+
+    // Guarantee the field exists so the frontend never chokes.
+    if (!Array.isArray(data.alternatives)) data.alternatives = [];
 
     return res.status(200).json(data);
   } catch (err) {
