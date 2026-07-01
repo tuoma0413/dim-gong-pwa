@@ -1,0 +1,25 @@
+{
+  "name": "點講",
+  "short_name": "點講",
+  "description": "Say it the way Hong Kong actually says it — English or Mandarin to natural spoken Cantonese.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F1ECE0",
+  "theme_color": "#0C5F47",
+  "orientation": "portrait-primary",
+  "lang": "zh-HK",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

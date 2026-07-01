@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Full-bleed background — no rounded corners for maskable -->
+  <rect width="512" height="512" fill="#0C5F47"/>
+  <!-- Centered in the safe area (inner 80% of canvas) -->
+  <text x="256" y="348"
+        text-anchor="middle"
+        font-size="272"
+        font-weight="700"
+        fill="#F1ECE0"
+        font-family="PingFang HK, PingFang TC, Noto Sans HK, Microsoft JhengHei, serif">點</text>
+</svg>

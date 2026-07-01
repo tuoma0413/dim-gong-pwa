@@ -1,0 +1,7 @@
+{
+  "name": "dim-gong-pwa",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  }
+}

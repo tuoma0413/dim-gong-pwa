@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0C5F47"/>
+  <text x="256" y="368"
+        text-anchor="middle"
+        font-size="312"
+        font-weight="700"
+        fill="#F1ECE0"
+        font-family="PingFang HK, PingFang TC, Noto Sans HK, Microsoft JhengHei, serif">點</text>
+</svg>
